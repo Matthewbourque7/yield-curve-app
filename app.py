@@ -7,7 +7,6 @@ Created on Fri Feb  5 18:58:27 2021
 
 import pandas as pd
 import numpy as np
-from yldcrv_funcs import *
 import datetime as dt
 
 import plotly.express as plx
@@ -16,13 +15,21 @@ import plotly.io as pio
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
 
-app = dash.Dash(__name__)
 
-df_cad, df_ont, df_que, df_ab, df_bc = get_data(sdate = '20000101',
-                                                edate=dt.datetime.today().strftime("%Y%m%d"))
+def is_busday(date):
+    return bool(len(pd.bdate_range(date, date)))
 
+
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.CYBORG])
+
+df_cad = pd.read_csv("df_cad.csv", index_col=('date'), parse_dates=(True))
+df_ont = pd.read_csv("df_ont.csv", index_col=('date'), parse_dates=(True))
+df_que = pd.read_csv("df_que.csv", index_col=('date'), parse_dates=(True))
+df_ab = pd.read_csv("df_ab.csv", index_col=('date'), parse_dates=(True))
+df_bc = pd.read_csv("df_bc.csv", index_col=('date'), parse_dates=(True))
 
 maxda = max(df_cad.index)
 default_date = maxda - dt.timedelta(weeks=1)
@@ -30,12 +37,36 @@ default_date = maxda - dt.timedelta(weeks=1)
 while not is_busday(default_date):
     default_date = default_date - dt.timedelta(days=1)
  
-    
+
 app.layout = html.Div([
+    
+    dbc.Row(dbc.Col(html.H1("Canadian Yield Curves", style={'text-align': 'center'}))),
+    
+    dbc.Row([
+        dbc.Col(dcc.Dropdown(id="crv",
+                 options=[
+                     {"label": "CAD", "value": 0},
+                     {"label": "ONT", "value": 1},
+                     {"label": "QUE", "value": 2},
+                     {"label": "AB", "value": 3},
+                     {"label": "BC", "value": 4}],
+                 multi=False,
+                 style={'width': "40%"},
+                 value=0), width=3),
+             
+        dbc.Col(dcc.DatePickerSingle(id="date",
+                     #style={'width': "40%"},
+                     max_date_allowed=maxda, 
+                     date=default_date), width=3)], no_gutters = False),
+   
 
-    html.H1("Canadian Yield Curves", style={'text-align': 'center'}),
+    dbc.Row(dbc.Col(html.Div(id='message1', children=[]))),
 
-    dcc.Dropdown(id="crv",
+    dbc.Row(dbc.Col(dcc.Graph(id='yldcrv', figure={}))),
+    dbc.Row(dbc.Col(dcc.Graph(id='slp', figure={}))),
+    dbc.Row(dbc.Col(dcc.Graph(id='roc', figure={}))),
+    
+    dbc.Row(dbc.Col(dcc.Dropdown(id="sprdcrv",
                  options=[
                      {"label": "CAD", "value": 0},
                      {"label": "ONT", "value": 1},
@@ -45,36 +76,9 @@ app.layout = html.Div([
                  multi=False,
                  value=0,
                  style={'width': "40%"}
-                 ),
+                 ))),
     
-    dcc.DatePickerSingle(id="date",
-                         style={'width': "40%"},
-                         max_date_allowed=maxda, 
-                         date=default_date), 
-
-    html.Div(id='message1', children=[]),
-    html.Br(), # break between drop down and graph
-
-    dcc.Graph(id='yldcrv', figure={}),
-    dcc.Graph(id='slp', figure={}),
-    dcc.Graph(id='roc', figure={}),
-    
-    dcc.Dropdown(id="sprdcrv",
-                 options=[
-                     {"label": "CAD", "value": 0},
-                     {"label": "ONT", "value": 1},
-                     {"label": "QUE", "value": 2},
-                     {"label": "AB", "value": 3},
-                     {"label": "BC", "value": 4}],
-                 multi=False,
-                 value=0,
-                 style={'width': "40%"}
-                 ),
-    
-    html.Div(id='message2', children=[]),
-    
-    dcc.Graph(id='sprd', figure={})
-    
+    dbc.Row(dbc.Col(dcc.Graph(id='sprd', figure={})))
 ])
 
 @app.callback(
@@ -136,7 +140,7 @@ def choose_crv(crvId, hdate):
                                     line = dict(dash='dot')))
         
         yldcrv.update_layout(title= "Yield Curve")
-                            #,template ="plotly_dark")
+                            #template ="plotly_dark")
         
         # steepness plot
         slp_y = df.values - df.values[0]
@@ -150,7 +154,7 @@ def choose_crv(crvId, hdate):
                                  line = dict(dash='dot')))
                                 
         slp.update_layout(title = "Rolldown")
-                          #,template ="plotly_dark")
+                          #template ="plotly_dark")
         
         # rate of change plot
         roc_y = np.append(np.zeros(1), np.diff(df.values))
@@ -165,7 +169,7 @@ def choose_crv(crvId, hdate):
                                  line = dict(dash='dot')))
         
         roc.update_layout(title = "Rate of Change")
-                          #,template ="plotly_dark")
+                          #template ="plotly_dark")
      
           
     except:
@@ -242,8 +246,10 @@ def update_sprd(sprdcrvId, crvId):
     
         sprd = go.Figure(data=go.Scatter(x = x,
                                          y = y))
+        
         sprd.update_layout(title = "Spread",
-                       yaxis_title = crv + " - " + crv_sprd)
+                           #template = "plotly_dark",
+                           yaxis_title = crv + " - " + crv_sprd)
     except:
         sprd = {}
         
